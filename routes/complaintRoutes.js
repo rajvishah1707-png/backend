@@ -517,19 +517,19 @@ router.post(
                     citizenName:
                         citizenName
                             ? citizenName.trim()
-                            : "",
+                            : req.user.name || "",
 
                     citizenEmail:
                         citizenEmail
                             ? citizenEmail
                                 .trim()
                                 .toLowerCase()
-                            : "",
+                            : req.user.email || "",
 
                     citizenPhone:
                         citizenPhone
                             ? citizenPhone.trim()
-                            : "",
+                            : req.user.phone || "",
 
                     category:
                         category.trim(),
@@ -548,7 +548,7 @@ router.post(
                     city:
                         city
                             ? city.trim()
-                            : "",
+                            : req.user.city || "",
 
                     priority:
                         selectedPriority,

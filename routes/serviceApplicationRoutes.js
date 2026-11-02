@@ -4,6 +4,8 @@ const router = express.Router();
 const ServiceApplication = require("../models/ServiceApplication");
 const User = require("../models/User");
 const Service = require("../models/Service");
+const { parseFee } = require("../utils/paymentPolicy");
+const { guardStatus, guardDelete } = require("../utils/applicationPaymentGuards");
 
 const authMiddleware = require("../middleware/authMiddleware");
 const adminMiddleware = require("../middleware/adminMiddleware");
@@ -63,40 +65,19 @@ router.post(
             }
 
 
-            let finalServiceName =
-                serviceName;
-
-
-            // If serviceId is provided,
-            // get latest service information
-
-            if (serviceId) {
-                try {
-                    const service =
-                        await Service.findById(
-                            serviceId
-                        );
-
-                    if (service) {
-                        finalServiceName =
-                            service.name ||
-                            service.serviceName ||
-                            serviceName;
-                    }
-
-                } catch (error) {
-                    console.log(
-                        "Service lookup skipped"
-                    );
-                }
+            const service = serviceId ? await Service.findById(serviceId) : null;
+            if (!service || service.status !== "active") {
+                return res.status(400).json({ success: false, message: "Please select an active city service" });
             }
-
+            const finalServiceName = service.name;
 
             const application =
                 await ServiceApplication.create({
                     applicationId:
                         generateApplicationId(),
 
+                    serviceId: service._id,
+                    feePaise: parseFee(service.fees),
                     userId: user._id,
 
                     citizenName:
@@ -318,6 +299,7 @@ router.patch(
             }
 
 
+            await guardStatus(application, status);
             application.status = status;
 
             if (
@@ -347,10 +329,10 @@ router.patch(
                 error
             );
 
-            return res.status(500).json({
+            return res.status(error.status || 500).json({
                 success: false,
                 message:
-                    "Failed to update application",
+                    (error.status ? error.message : "Failed to update application"),
                 error:
                     error.message
             });
@@ -384,6 +366,7 @@ router.delete(
             }
 
 
+            await guardDelete(req.params.id);
             await ServiceApplication.findByIdAndDelete(
                 req.params.id
             );
@@ -401,10 +384,10 @@ router.delete(
                 error
             );
 
-            return res.status(500).json({
+            return res.status(error.status || 500).json({
                 success: false,
                 message:
-                    "Failed to delete application",
+                    (error.status ? error.message : "Failed to delete application"),
                 error:
                     error.message
             });

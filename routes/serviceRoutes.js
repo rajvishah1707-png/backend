@@ -4,6 +4,8 @@ const mongoose = require("mongoose");
 const Service = require("../models/Service");
 
 const router = express.Router();
+const auth = require("../middleware/authMiddleware");
+const admin = require("../middleware/adminMiddleware");
 
 
 // ======================================================
@@ -269,7 +271,7 @@ router.get("/", async (req, res) => {
 // GET /api/services/admin/all
 // ======================================================
 
-router.get("/admin/all", async (req, res) => {
+router.get("/admin/all", auth, admin, async (req, res) => {
 
     try {
 
@@ -307,6 +309,15 @@ router.get("/admin/all", async (req, res) => {
 // GET SINGLE SERVICE
 // GET /api/services/:id
 // ======================================================
+
+router.get("/categories", async (req, res) => {
+    try {
+        const categories = await Service.distinct("category", { status: "active" });
+        res.json({ success: true, categories: categories.filter(Boolean).sort() });
+    } catch {
+        res.status(500).json({ success: false, message: "Unable to load service categories" });
+    }
+});
 
 router.get("/:id", async (req, res) => {
 
@@ -368,7 +379,7 @@ router.get("/:id", async (req, res) => {
 // POST /api/services
 // ======================================================
 
-router.post("/", async (req, res) => {
+router.post("/", auth, admin, async (req, res) => {
 
     try {
 
@@ -473,7 +484,7 @@ router.post("/", async (req, res) => {
 // PUT /api/services/:id
 // ======================================================
 
-router.put("/:id", async (req, res) => {
+router.put("/:id", auth, admin, async (req, res) => {
 
     try {
 
@@ -595,7 +606,7 @@ router.put("/:id", async (req, res) => {
 // DELETE /api/services/:id
 // ======================================================
 
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", auth, admin, async (req, res) => {
 
     try {
 
