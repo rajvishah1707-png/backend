@@ -486,31 +486,64 @@ router.post(
     "/request-login-otp",
     async (req, res) => {
         try {
-            const phone =
-                typeof req.body.phone === "string"
-                    ? req.body.phone.trim()
+            const email =
+                typeof req.body.email === "string"
+                    ? req.body.email.trim().toLowerCase()
+                    : "";
+            const password =
+                typeof req.body.password === "string"
+                    ? req.body.password
                     : "";
 
-            if (!isValidCitizenPhone(phone)) {
+            if (!email || !password) {
                 return res.status(400).json({
                     success: false,
-                    message: "A valid 10-digit phone number is required"
+                    message: "Email and password are required"
                 });
             }
 
-            const user = await findUniqueCitizenByPhone(phone);
+            const user = await User.findOne({
+                email,
+                role: "citizen"
+            });
 
-            if (user && user.isActive !== false) {
-                await issueOtp(
-                    phone,
-                    "login",
-                    (otp) => `Your login verification code is ${otp}. It expires in 5 minutes.`
-                );
+            if (!user || !(await bcrypt.compare(password, user.password))) {
+                return res.status(401).json({
+                    success: false,
+                    message: "Invalid email or password"
+                });
+            }
+
+            if (user.isActive === false) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Your account is inactive. Please contact administrator."
+                });
+            }
+
+            if (!isValidCitizenPhone(user.phone)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "A valid 10-digit mobile number is not registered for this account"
+                });
+            }
+
+            const otpSent = await issueOtp(
+                user.phone,
+                "login",
+                (otp) => `Your login verification code is ${otp}. It expires in 5 minutes.`
+            );
+
+            if (!otpSent) {
+                return res.status(429).json({
+                    success: false,
+                    message: "Please wait 60 seconds before requesting another OTP"
+                });
             }
 
             return res.status(200).json({
                 success: true,
-                message: "If an active account exists for this phone, a verification code has been sent"
+                message: "Verification code sent to your registered mobile number"
             });
         } catch (error) {
             console.error("LOGIN OTP REQUEST ERROR:", error.message);
@@ -532,32 +565,35 @@ router.post(
     "/verify-login-otp",
     async (req, res) => {
         try {
-            const phone =
-                typeof req.body.phone === "string"
-                    ? req.body.phone.trim()
+            const email =
+                typeof req.body.email === "string"
+                    ? req.body.email.trim().toLowerCase()
                     : "";
             const otp =
                 typeof req.body.otp === "string"
                     ? req.body.otp.trim()
                     : "";
 
-            if (!isValidCitizenPhone(phone) || !/^\d{6}$/.test(otp)) {
+            if (!email || !/^\d{6}$/.test(otp)) {
                 return res.status(400).json({
                     success: false,
-                    message: "A valid 10-digit phone number and six-digit verification code are required"
+                    message: "Email and six-digit verification code are required"
                 });
             }
 
-            const user = await findUniqueCitizenByPhone(phone);
+            const user = await User.findOne({
+                email,
+                role: "citizen"
+            });
 
-            if (!user || user.isActive === false) {
+            if (!user || !isValidCitizenPhone(user.phone) || user.isActive === false) {
                 return res.status(401).json({
                     success: false,
                     message: "Invalid or expired verification code"
                 });
             }
 
-            const isValidOtp = await consumeOtp(phone, "login", otp);
+            const isValidOtp = await consumeOtp(user.phone, "login", otp);
 
             if (!isValidOtp) {
                 return res.status(401).json({
