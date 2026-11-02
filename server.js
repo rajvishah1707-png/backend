@@ -7,6 +7,16 @@ dotenv.config();
 
 const app = express();
 
+const allowedOrigins = new Set(
+    [
+        "http://localhost:3000",
+        process.env.FRONTEND_URL,
+        ...(process.env.CORS_ORIGINS || "").split(",")
+    ]
+        .map((origin) => origin.trim().replace(/\/$/, ""))
+        .filter(Boolean)
+);
+
 
 /* =========================================================
    MIDDLEWARE
@@ -14,7 +24,9 @@ const app = express();
 
 app.use(
     cors({
-        origin: "http://localhost:3000",
+        origin: (origin, callback) => {
+            callback(null, !origin || allowedOrigins.has(origin));
+        },
         credentials: true
     })
 );
