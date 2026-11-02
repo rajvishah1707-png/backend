@@ -71,6 +71,10 @@ const digitalDocumentSchema = new mongoose.Schema(
             default: 0
         },
 
+        // File bytes are private and excluded from metadata responses.
+        fileData: { type: Buffer, select: false },
+        fileStorage: { type: String, enum: ["database", "disk"], default: "disk" },
+
         // Document status
         status: {
             type: String,
@@ -111,7 +115,9 @@ const digitalDocumentSchema = new mongoose.Schema(
         }
     },
     {
-        timestamps: true
+        timestamps: true,
+        toJSON: { transform: (doc, value) => { delete value.fileData; return value; } },
+        toObject: { transform: (doc, value) => { delete value.fileData; return value; } }
     }
 );
 

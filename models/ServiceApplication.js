@@ -10,6 +10,13 @@ const serviceApplicationSchema = new mongoose.Schema(
 
         serviceId: { type: mongoose.Schema.Types.ObjectId, ref: "Service" },
         feePaise: { type: Number, default: null, min: 0 },
+        documentRequirements: { type: [String], default: [] },
+        documentFlowVersion: { type: Number, default: 0 },
+        documents: [{
+            requirement: { type: String, required: true },
+            document: { type: mongoose.Schema.Types.ObjectId, ref: "DigitalDocument", required: true },
+            _id: false
+        }],
         userId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
@@ -93,7 +100,8 @@ const serviceApplicationSchema = new mongoose.Schema(
     },
 
     {
-        timestamps: true
+        timestamps: true,
+        optimisticConcurrency: true
     }
 );
 

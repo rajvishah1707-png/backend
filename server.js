@@ -164,6 +164,7 @@ app.use(
 
 
 app.use("/api/admin/system", require("./routes/managementRoutes"));
+app.use("/api/service-applications", require("./routes/applicationDocumentRoutes"));
 app.use("/api/payments", require("./routes/paymentRoutes").router);
 app.use("/api/feedback", require("./routes/feedbackRoutes"));
 
