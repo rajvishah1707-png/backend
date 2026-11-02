@@ -7,6 +7,8 @@ const fs = require("fs");
 const router = express.Router();
 
 const DigitalDocument = require("../models/DigitalDocument");
+const ServiceApplication = require("../models/ServiceApplication");
+const documentStorage = require("../utils/documentStorage");
 const authMiddleware = require("../middleware/authMiddleware");
 
 
@@ -32,35 +34,7 @@ if (!fs.existsSync(uploadDirectory)) {
 // MULTER STORAGE
 // =====================================================
 
-const storage = multer.diskStorage({
-
-    destination: (req, file, cb) => {
-
-        cb(
-            null,
-            uploadDirectory
-        );
-
-    },
-
-    filename: (req, file, cb) => {
-
-        const extension =
-            path.extname(file.originalname);
-
-        const uniqueName =
-            `document-${Date.now()}-${Math.round(
-                Math.random() * 1000000
-            )}${extension}`;
-
-        cb(
-            null,
-            uniqueName
-        );
-
-    }
-
-});
+const storage = multer.memoryStorage();
 
 
 // =====================================================
@@ -328,422 +302,56 @@ router.get(
 // POST /api/digital-documents
 // =====================================================
 
-router.post(
-    "/",
-    authMiddleware,
-    upload.single("document"),
-    async (req, res) => {
-
-        try {
-
-            const userId =
-                getUserId(req);
-
-
-            // -----------------------------------------
-            // AUTHENTICATION
-            // -----------------------------------------
-
-            if (!isValidUserId(userId)) {
-
-                if (req.file) {
-
-                    try {
-
-                        if (
-                            fs.existsSync(
-                                req.file.path
-                            )
-                        ) {
-
-                            fs.unlinkSync(
-                                req.file.path
-                            );
-
-                        }
-
-                    } catch (deleteError) {
-
-                        console.error(
-                            "Failed to delete uploaded file:",
-                            deleteError
-                        );
-
-                    }
-
-                }
-
-
-                return res.status(401).json({
-
-                    success: false,
-
-                    message:
-                        "Invalid user authentication"
-
-                });
-
-            }
-
-
-            // -----------------------------------------
-            // FILE REQUIRED
-            // -----------------------------------------
-
-            if (!req.file) {
-
-                return res.status(400).json({
-
-                    success: false,
-
-                    message:
-                        "Please select a document file"
-
-                });
-
-            }
-
-
-            const {
-                citizenName,
-                citizenEmail,
-                documentType,
-                documentTitle,
-                description
-            } = req.body;
-
-
-            // -----------------------------------------
-            // VALIDATE DOCUMENT TYPE
-            // -----------------------------------------
-
-            if (!documentType) {
-
-                fs.unlinkSync(
-                    req.file.path
-                );
-
-                return res.status(400).json({
-
-                    success: false,
-
-                    message:
-                        "Document type is required"
-
-                });
-
-            }
-
-
-            // -----------------------------------------
-            // VALIDATE DOCUMENT TITLE
-            // -----------------------------------------
-
-            if (
-                !documentTitle ||
-                documentTitle
-                    .trim()
-                    .length < 2
-            ) {
-
-                fs.unlinkSync(
-                    req.file.path
-                );
-
-                return res.status(400).json({
-
-                    success: false,
-
-                    message:
-                        "Document title is required"
-
-                });
-
-            }
-
-
-            // -----------------------------------------
-            // CREATE DATABASE RECORD
-            // -----------------------------------------
-
-            const newDocument =
-                await DigitalDocument.create({
-
-                    documentId:
-                        generateDocumentId(),
-
-                    userId:
-                        userId,
-
-                    citizenName:
-                        citizenName || "",
-
-                    citizenEmail:
-                        citizenEmail || "",
-
-                    documentType:
-                        documentType.trim(),
-
-                    documentTitle:
-                        documentTitle.trim(),
-
-                    description:
-                        description
-                            ? description.trim()
-                            : "",
-
-                    originalFileName:
-                        req.file.originalname,
-
-                    fileName:
-                        req.file.filename,
-
-                    filePath:
-                        `/api/digital-documents/file/${req.file.filename}`,
-
-                    fileType:
-                        req.file.mimetype,
-
-                    fileSize:
-                        req.file.size,
-
-                    status:
-                        "Pending",
-
-                    adminRemark:
-                        "",
-
-                    reviewedBy:
-                        "",
-
-                    reviewedAt:
-                        null,
-
-                    verifiedAt:
-                        null,
-
-                    rejectedAt:
-                        null
-
-                });
-
-
-            // -----------------------------------------
-            // SUCCESS
-            // -----------------------------------------
-
-            return res.status(201).json({
-
-                success: true,
-
-                message:
-                    "Document uploaded successfully",
-
-                document:
-                    newDocument
-
-            });
-
-        } catch (error) {
-
-            // Delete uploaded file if database fails
-
-            if (req.file) {
-
-                try {
-
-                    if (
-                        fs.existsSync(
-                            req.file.path
-                        )
-                    ) {
-
-                        fs.unlinkSync(
-                            req.file.path
-                        );
-
-                    }
-
-                } catch (deleteError) {
-
-                    console.error(
-                        "Failed to delete uploaded file:",
-                        deleteError
-                    );
-
-                }
-
-            }
-
-
-            console.error(
-                "Upload document error:",
-                error
-            );
-
-
-            return res.status(500).json({
-
-                success: false,
-
-                message:
-                    "Failed to upload document",
-
-                error:
-                    error.message
-
-            });
-
+router.post("/", authMiddleware, upload.single("document"), async (req, res) => {
+    try {
+        documentStorage.validateFile(req.file);
+        const { documentType, documentTitle, description } = req.body;
+        if (typeof documentType !== "string" || !documentType.trim() || documentType.length > 150 ||
+            typeof documentTitle !== "string" || documentTitle.trim().length < 2 || documentTitle.length > 200) {
+            return res.status(400).json({ success: false, message: "Document type and title are required" });
         }
-
+        const filename = documentStorage.fileName(req.file);
+        const document = await DigitalDocument.create({
+            documentId: generateDocumentId(), userId: getUserId(req),
+            citizenName: req.user.name || "", citizenEmail: req.user.email || "",
+            documentType: documentType.trim(), documentTitle: documentTitle.trim(),
+            description: typeof description === "string" ? description.trim().slice(0, 2000) : "",
+            originalFileName: req.file.originalname, fileName: filename,
+            filePath: `/api/digital-documents/file/${filename}`,
+            fileType: req.file.mimetype === "image/jpg" ? "image/jpeg" : req.file.mimetype,
+            fileSize: req.file.size, fileStorage: "database", fileData: req.file.buffer,
+            status: "Pending"
+        });
+        return res.status(201).json({ success: true, message: "Document uploaded successfully", document });
+    } catch (error) {
+        return res.status(error.status || 500).json({ success: false, message: error.status ? error.message : "Failed to upload document" });
     }
-);
-
+});
 
 // =====================================================
 // VIEW / DOWNLOAD DOCUMENT
 // GET /api/digital-documents/file/:filename
 // =====================================================
 
-router.get(
-    "/file/:filename",
-    authMiddleware,
-    async (req, res) => {
-
-        try {
-
-            const filename =
-                path.basename(
-                    req.params.filename
-                );
-
-
-            const filePath =
-                path.join(
-                    uploadDirectory,
-                    filename
-                );
-
-
-            // -----------------------------------------
-            // CHECK PHYSICAL FILE
-            // -----------------------------------------
-
-            if (
-                !fs.existsSync(
-                    filePath
-                )
-            ) {
-
-                return res.status(404).json({
-
-                    success: false,
-
-                    message:
-                        "Document file not found"
-
-                });
-
-            }
-
-
-            // -----------------------------------------
-            // FIND DOCUMENT
-            // -----------------------------------------
-
-            const document =
-                await DigitalDocument.findOne({
-                    fileName:
-                        filename
-                });
-
-
-            if (!document) {
-
-                return res.status(404).json({
-
-                    success: false,
-
-                    message:
-                        "Document record not found"
-
-                });
-
-            }
-
-
-            // -----------------------------------------
-            // CHECK USER
-            // -----------------------------------------
-
-            const userId =
-                getUserId(req);
-
-
-            const isAdmin =
-                isAdminUser(req);
-
-
-            // -----------------------------------------
-            // ONLY OWNER OR ADMIN
-            // -----------------------------------------
-
-            if (
-                !isAdmin &&
-                (
-                    !userId ||
-                    document.userId.toString() !==
-                        userId.toString()
-                )
-            ) {
-
-                return res.status(403).json({
-
-                    success: false,
-
-                    message:
-                        "You are not allowed to access this document"
-
-                });
-
-            }
-
-
-            // -----------------------------------------
-            // SEND FILE
-            // -----------------------------------------
-
-            return res.sendFile(
-                filePath
-            );
-
-        } catch (error) {
-
-            console.error(
-                "View document error:",
-                error
-            );
-
-
-            return res.status(500).json({
-
-                success: false,
-
-                message:
-                    "Failed to open document"
-
-            });
-
+router.get("/file/:filename", authMiddleware, async (req, res) => {
+    try {
+        const filename = path.basename(req.params.filename);
+        const document = await DigitalDocument.findOne({ fileName: filename }).select("+fileData");
+        if (!document) return res.status(404).json({ success: false, message: "Document not found" });
+        if (!isAdminUser(req) && String(document.userId) !== String(getUserId(req))) {
+            return res.status(403).json({ success: false, message: "You are not allowed to access this document" });
         }
-
+        if (!documentStorage.available(document)) return res.status(404).json({ success: false, message: "This older file is no longer available. Please upload it again." });
+        res.set("Cache-Control", "private, no-store");
+        res.set("X-Content-Type-Options", "nosniff");
+        res.set("Content-Security-Policy", "sandbox");
+        res.type(document.fileType || "application/octet-stream");
+        if (document.fileStorage === "database") return res.send(document.fileData);
+        return res.sendFile(path.join(uploadDirectory, filename));
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Failed to open document" });
     }
-);
-
-
-// =====================================================
-// GET SINGLE DOCUMENT
-// GET /api/digital-documents/:id
-// =====================================================
+});
 
 router.get(
     "/:id",
@@ -948,6 +556,9 @@ router.patch(
             // UPDATE STATUS
             // -----------------------------------------
 
+            const storedFile = await DigitalDocument.findById(document._id).select("+fileData");
+            if (!documentStorage.available(storedFile)) return res.status(409).json({ success: false, message: "The file is unavailable. Ask the citizen to upload it again." });
+
             document.status =
                 "Verified";
 
@@ -1112,6 +723,10 @@ router.patch(
             // UPDATE STATUS
             // -----------------------------------------
 
+            if (await ServiceApplication.exists({ "documents.document": document._id, status: { $in: ["Approved", "In Progress", "Completed"] } })) {
+                return res.status(409).json({ success: false, message: "This document supports an approved application. Review that application before changing its verified document." });
+            }
+
             document.status =
                 "Rejected";
 
@@ -1254,6 +869,10 @@ router.delete(
 
             }
 
+
+            if (await ServiceApplication.exists({ "documents.document": document._id })) {
+                return res.status(409).json({ success: false, message: "This document is linked to an application and must be retained" });
+            }
 
             // -----------------------------------------
             // DELETE PHYSICAL FILE
@@ -1472,6 +1091,10 @@ router.delete(
 
             }
 
+
+            if (await ServiceApplication.exists({ "documents.document": document._id })) {
+                return res.status(409).json({ success: false, message: "This document is linked to an application and must be retained" });
+            }
 
             // -----------------------------------------
             // DELETE PHYSICAL FILE

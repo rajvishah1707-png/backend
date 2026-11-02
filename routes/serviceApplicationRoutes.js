@@ -4,6 +4,7 @@ const router = express.Router();
 const ServiceApplication = require("../models/ServiceApplication");
 const User = require("../models/User");
 const Service = require("../models/Service");
+const { requirementsFor, validateDocuments } = require("../utils/applicationDocuments");
 const { parseFee } = require("../utils/paymentPolicy");
 const { guardStatus, guardDelete } = require("../utils/applicationPaymentGuards");
 
@@ -43,7 +44,8 @@ router.post(
                 city,
                 applicationData,
                 purpose,
-                additionalDetails
+                additionalDetails,
+                documents
             } = req.body;
 
 
@@ -70,12 +72,18 @@ router.post(
                 return res.status(400).json({ success: false, message: "Please select an active city service" });
             }
             const finalServiceName = service.name;
+            const documentRequirements = requirementsFor(service);
+            const attachments = await validateDocuments(user._id, documentRequirements, documents);
+
 
             const application =
                 await ServiceApplication.create({
                     applicationId:
                         generateApplicationId(),
 
+                    documentFlowVersion: 1,
+                    documentRequirements,
+                    documents: attachments,
                     serviceId: service._id,
                     feePaise: parseFee(service.fees),
                     userId: user._id,
@@ -138,10 +146,10 @@ router.post(
                 error
             );
 
-            return res.status(500).json({
+            return res.status(error.status || 500).json({
                 success: false,
                 message:
-                    "Failed to submit application",
+                    error.status ? error.message : "Failed to submit application",
                 error:
                     error.message
             });
