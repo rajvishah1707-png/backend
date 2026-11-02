@@ -39,7 +39,9 @@ router.post(
                 description,
                 address,
                 city,
-                applicationData
+                applicationData,
+                purpose,
+                additionalDetails
             } = req.body;
 
 
@@ -121,8 +123,12 @@ router.post(
                     city:
                         city || user.city || "",
 
-                    applicationData:
-                        applicationData || {},
+                    applicationData: {
+                        ...(applicationData && typeof applicationData === "object" && !Array.isArray(applicationData)
+                            ? applicationData : {}),
+                        ...(typeof purpose === "string" ? { purpose } : {}),
+                        ...(typeof additionalDetails === "string" ? { additionalDetails } : {})
+                    },
 
                     status:
                         "Pending",
@@ -216,11 +222,14 @@ router.get(
     authMiddleware,
     async (req, res) => {
         try {
-            const application =
-                await ServiceApplication.findOne({
-                    _id: req.params.id,
-                    userId: req.user.id
-                });
+            const identifier = req.params.id;
+            const lookup = /^[a-f0-9]{24}$/i.test(identifier)
+                ? { _id: identifier }
+                : { applicationId: identifier };
+            const application = await ServiceApplication.findOne({
+                ...lookup,
+                userId: req.user.id
+            });
 
 
             if (!application) {
