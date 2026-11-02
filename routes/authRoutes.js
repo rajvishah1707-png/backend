@@ -284,7 +284,10 @@ const getProfileImageUrl = (filename) => {
 
 router.post(
     "/register",
+    uploadProfileImage.single("profileImage"),
     async (req, res) => {
+
+        let uploadedFilePath = req.file?.path || null;
 
         try {
 
@@ -305,6 +308,10 @@ router.post(
                 !phone ||
                 !password
             ) {
+                if (uploadedFilePath) {
+                    fs.unlinkSync(uploadedFilePath);
+                    uploadedFilePath = null;
+                }
 
                 return res.status(400).json({
                     success: false,
@@ -317,6 +324,11 @@ router.post(
             const normalizedPhone = phone.trim();
 
             if (!isValidCitizenPhone(normalizedPhone)) {
+                if (uploadedFilePath) {
+                    fs.unlinkSync(uploadedFilePath);
+                    uploadedFilePath = null;
+                }
+
                 return res.status(400).json({
                     success: false,
                     message: "A valid 10-digit phone number is required"
@@ -335,6 +347,10 @@ router.post(
 
 
             if (existingUser) {
+                if (uploadedFilePath) {
+                    fs.unlinkSync(uploadedFilePath);
+                    uploadedFilePath = null;
+                }
 
                 return res.status(400).json({
                     success: false,
@@ -351,6 +367,11 @@ router.post(
                 });
 
             if (existingPhone) {
+                if (uploadedFilePath) {
+                    fs.unlinkSync(uploadedFilePath);
+                    uploadedFilePath = null;
+                }
+
                 return res.status(400).json({
                     success: false,
                     message: "An account with this phone number already exists"
@@ -391,7 +412,9 @@ router.post(
                             ? pincode.trim()
                             : "",
 
-                    profileImage: "",
+                    profileImage: req.file
+                        ? getProfileImageUrl(req.file.filename)
+                        : "",
 
                     role: "citizen",
 
@@ -403,6 +426,7 @@ router.post(
 
                 });
 
+            uploadedFilePath = null;
 
             const token =
                 generateToken(user);
@@ -444,6 +468,13 @@ router.post(
 
 
         } catch (error) {
+            if (uploadedFilePath && fs.existsSync(uploadedFilePath)) {
+                try {
+                    fs.unlinkSync(uploadedFilePath);
+                } catch (cleanupError) {
+                    console.error("REGISTER PROFILE IMAGE CLEANUP ERROR:", cleanupError);
+                }
+            }
 
             console.error(
                 "REGISTER ERROR:",
