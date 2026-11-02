@@ -31,6 +31,8 @@ app.use(
     })
 );
 
+app.post("/api/payments/webhook", express.raw({ type: "application/json", limit: "1mb" }),
+    require("./routes/paymentRoutes").webhook);
 app.use(express.json());
 
 app.use(
@@ -160,6 +162,10 @@ app.use(
     digitalDocumentRoutes
 );
 
+
+app.use("/api/admin/system", require("./routes/managementRoutes"));
+app.use("/api/payments", require("./routes/paymentRoutes").router);
+app.use("/api/feedback", require("./routes/feedbackRoutes"));
 
 /* =========================================================
    API TEST ROUTES
@@ -318,7 +324,7 @@ if (!MONGO_URI) {
 mongoose
     .connect(MONGO_URI)
 
-    .then(() => {
+    .then(async () => {
 
         console.log(
             "================================="
@@ -333,6 +339,8 @@ mongoose
         );
 
 
+        // The unique application/order indexes are required before serving checkout.
+        await require("./models/Payment").init();
         const PORT =
             process.env.PORT || 5000;
 
@@ -542,3 +550,4 @@ mongoose
         process.exit(1);
 
     });
+

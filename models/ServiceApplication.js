@@ -8,6 +8,8 @@ const serviceApplicationSchema = new mongoose.Schema(
             required: true
         },
 
+        serviceId: { type: mongoose.Schema.Types.ObjectId, ref: "Service" },
+        feePaise: { type: Number, default: null, min: 0 },
         userId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",

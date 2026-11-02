@@ -3,6 +3,7 @@ const bcrypt = require("bcryptjs");
 const mongoose = require("mongoose");
 
 const router = express.Router();
+router.use(require("../middleware/authMiddleware"), require("../middleware/adminMiddleware"));
 
 // ============================================================
 // MODELS
@@ -13,6 +14,8 @@ const Service = require("../models/Service");
 const ServiceApplication = require("../models/ServiceApplication");
 const Complaint = require("../models/Complaint");
 const Notification = require("../models/Notification");
+const Payment = require("../models/Payment");
+const { guardStatus, guardDelete } = require("../utils/applicationPaymentGuards");
 
 // ============================================================
 // ALLOWED APPLICATION STATUSES
@@ -614,6 +617,9 @@ router.delete(
 
             }
 
+            if (await Payment.exists({ userId: req.params.id })) {
+                return res.status(409).json({ success: false, message: "Citizens with payment records must be retained; deactivate instead" });
+            }
             const user =
                 await User.findOneAndDelete({
                     _id: req.params.id,
@@ -992,6 +998,7 @@ router.patch(
 
             }
 
+            await guardStatus(application, status);
             application.status =
                 status;
 
@@ -1141,10 +1148,10 @@ router.patch(
                 error
             );
 
-            res.status(500).json({
+            res.status(error.status || 500).json({
                 success: false,
                 message:
-                    "Server error while updating application status",
+                    (error.status ? error.message : "Server error while updating application status"),
                 error: error.message
             });
         }
@@ -1176,6 +1183,7 @@ router.delete(
 
             }
 
+            await guardDelete(req.params.id);
             const application =
                 await ServiceApplication.findByIdAndDelete(
                     req.params.id
@@ -1204,10 +1212,10 @@ router.delete(
                 error
             );
 
-            res.status(500).json({
+            res.status(error.status || 500).json({
                 success: false,
                 message:
-                    "Failed to delete application",
+                    (error.status ? error.message : "Failed to delete application"),
                 error: error.message
             });
         }

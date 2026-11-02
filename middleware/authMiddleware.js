@@ -21,7 +21,7 @@ const authMiddleware = async (req, res, next) => {
             process.env.JWT_SECRET
         );
 
-        console.log("DECODED TOKEN:", decoded);
+
 
         /*
          * Support different JWT formats
@@ -60,6 +60,9 @@ const authMiddleware = async (req, res, next) => {
             });
         }
 
+        if (user.isActive === false) {
+            return res.status(403).json({ success: false, message: "Account is inactive" });
+        }
         req.user = user;
 
         next();
