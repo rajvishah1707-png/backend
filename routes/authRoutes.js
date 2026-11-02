@@ -12,6 +12,7 @@ const { sendSms } = require("../utils/smsUtils");
 const { sendEmail } = require("../utils/emailUtils");
 
 const router = express.Router();
+const { uploadProfilePhoto } = require("../utils/profilePhoto");
 
 /* =========================================================
    PROFILE IMAGE UPLOAD SETUP
@@ -33,32 +34,7 @@ if (!fs.existsSync(profileUploadDir)) {
    MULTER STORAGE
 ========================================================= */
 
-const storage = multer.diskStorage({
-
-    destination: (req, file, cb) => {
-        cb(null, profileUploadDir);
-    },
-
-    filename: (req, file, cb) => {
-
-        const extensionMap = {
-            "image/jpeg": ".jpg",
-            "image/png": ".png",
-            "image/webp": ".webp"
-        };
-
-        const extension =
-            extensionMap[file.mimetype] || ".jpg";
-
-        const uniqueName =
-            `profile-${Date.now()}-${crypto
-                .randomBytes(8)
-                .toString("hex")}${extension}`;
-
-        cb(null, uniqueName);
-    }
-
-});
+const storage = multer.memoryStorage();
 
 
 /* =========================================================
@@ -407,7 +383,7 @@ router.post(
                             : "",
 
                     profileImage: req.file
-                        ? getProfileImageUrl(req.file.filename)
+                        ? await uploadProfilePhoto(req.file)
                         : "",
 
                     role: "citizen",
@@ -634,6 +610,7 @@ router.post(
                     name: user.name,
                     email: user.email,
                     phone: user.phone,
+                    profileImage: user.profileImage,
                     role: user.role,
                     isActive: user.isActive
                 }
@@ -1040,9 +1017,7 @@ router.put(
             ) {
 
                 if (req.file) {
-                    fs.unlinkSync(
-                        req.file.path
-                    );
+                    // Memory uploads require no file cleanup.
                 }
 
                 return res.status(400).json({
@@ -1083,10 +1058,9 @@ router.put(
 
             if (req.file) {
 
-                user.profileImage =
-                    getProfileImageUrl(
-                        req.file.filename
-                    );
+                user.profileImage = await uploadProfilePhoto(req.file);
+            } else if (req.body.removeProfileImage === "true") {
+                user.profileImage = "";
 
             }
 
