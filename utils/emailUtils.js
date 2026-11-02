@@ -1,4 +1,8 @@
-const sendEmail = async (recipient, message) => {
+const sendEmail = async (
+    recipient,
+    message,
+    subject = "Your Smart City verification code"
+) => {
     const apiKey = process.env.BREVO_API_KEY;
     const senderEmail = process.env.BREVO_SENDER_EMAIL;
     const senderName = process.env.BREVO_SENDER_NAME;
@@ -20,7 +24,7 @@ const sendEmail = async (recipient, message) => {
                 email: senderEmail
             },
             to: [{ email: recipient }],
-            subject: "Your Smart City verification code",
+            subject,
             textContent: message
         })
     });

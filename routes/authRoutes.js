@@ -208,16 +208,6 @@ const consumeOtp = async (identifier, purpose, submittedOtp) => {
     return isValid;
 };
 
-const findUniqueCitizenByPhone = async (phone) => {
-    const users = await User.find({
-        phone,
-        role: "citizen"
-    }).limit(2);
-
-    return users.length === 1 ? users[0] : null;
-};
-
-
 /* =========================================================
    AUTH HELPER
 ========================================================= */
@@ -508,7 +498,7 @@ router.post(
     "/login",
     (req, res) => res.status(410).json({
         success: false,
-        message: "Password login is no longer available. Use phone number and SMS OTP login."
+        message: "Password login is no longer available. Use email and verification code login."
     })
 );
 
@@ -668,31 +658,36 @@ router.post(
     "/forgot-password",
     async (req, res) => {
         try {
-            const phone =
-                typeof req.body.phone === "string"
-                    ? req.body.phone.trim()
+            const email =
+                typeof req.body.email === "string"
+                    ? req.body.email.trim().toLowerCase()
                     : "";
 
-            if (!isValidCitizenPhone(phone)) {
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
                 return res.status(400).json({
                     success: false,
-                    message: "A valid 10-digit phone number is required"
+                    message: "A valid email address is required"
                 });
             }
 
-            const user = await findUniqueCitizenByPhone(phone);
+            const user = await User.findOne({
+                email,
+                role: "citizen"
+            });
 
             if (user) {
                 await issueOtp(
-                    phone,
+                    user.email,
                     "password-reset",
-                    (otp) => `Your password reset code is ${otp}. It expires in 5 minutes. Do not share it.`
+                    (otp) => `Your Smart City password reset code is ${otp}. It expires in 5 minutes. Do not share it.`,
+                    (recipient, message) =>
+                        sendEmail(recipient, message, "Your Smart City password reset code")
                 );
             }
 
             return res.status(200).json({
                 success: true,
-                message: "If an account exists for this phone, a password reset code has been sent"
+                message: "If an account exists for this email, a password reset code has been sent"
             });
         } catch (error) {
             console.error("PASSWORD RESET OTP REQUEST ERROR:", error.message);
@@ -714,9 +709,9 @@ router.post(
     "/reset-password",
     async (req, res) => {
         try {
-            const phone =
-                typeof req.body.phone === "string"
-                    ? req.body.phone.trim()
+            const email =
+                typeof req.body.email === "string"
+                    ? req.body.email.trim().toLowerCase()
                     : "";
             const otp =
                 typeof req.body.otp === "string"
@@ -725,20 +720,23 @@ router.post(
             const newPassword = req.body.newPassword;
 
             if (
-                !isValidCitizenPhone(phone) ||
+                !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
                 !/^\d{6}$/.test(otp) ||
                 typeof newPassword !== "string" ||
                 newPassword.length < 8
             ) {
                 return res.status(400).json({
                     success: false,
-                    message: "Phone, six-digit code, and a password of at least 8 characters are required"
+                    message: "Email, six-digit code, and a password of at least 8 characters are required"
                 });
             }
 
-            const user = await findUniqueCitizenByPhone(phone);
+            const user = await User.findOne({
+                email,
+                role: "citizen"
+            });
 
-            if (!user || !(await consumeOtp(phone, "password-reset", otp))) {
+            if (!user || !(await consumeOtp(user.email, "password-reset", otp))) {
                 return res.status(400).json({
                     success: false,
                     message: "Invalid or expired password reset code"
