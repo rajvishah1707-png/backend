@@ -9,6 +9,7 @@ const crypto = require("crypto");
 const User = require("../models/User");
 const OtpVerification = require("../models/OtpVerification");
 const { sendSms } = require("../utils/smsUtils");
+const { sendEmail } = require("../utils/emailUtils");
 
 const router = express.Router();
 
@@ -131,15 +132,18 @@ const OTP_RESEND_INTERVAL_MS = 60 * 1000;
 const OTP_MAX_ATTEMPTS = 5;
 const isValidCitizenPhone = (phone) => /^\d{10}$/.test(phone);
 
-const hashOtp = (phone, purpose, otp) => {
+const hashOtp = (identifier, purpose, otp) => {
     return crypto
         .createHmac("sha256", process.env.JWT_SECRET)
-        .update(`${phone}:${purpose}:${otp}`)
+        .update(`${identifier}:${purpose}:${otp}`)
         .digest("hex");
 };
 
-const issueOtp = async (phone, purpose, message) => {
-    const existingOtp = await OtpVerification.findOne({ phone, purpose });
+const issueOtp = async (identifier, purpose, message, deliver = sendSms) => {
+    const existingOtp = await OtpVerification.findOne({
+        phone: identifier,
+        purpose
+    });
     const now = Date.now();
 
     if (
@@ -152,10 +156,10 @@ const issueOtp = async (phone, purpose, message) => {
     const otp = crypto.randomInt(100000, 1000000).toString();
 
     await OtpVerification.findOneAndUpdate(
-        { phone, purpose },
+        { phone: identifier, purpose },
         {
             $set: {
-                codeHash: hashOtp(phone, purpose, otp),
+                codeHash: hashOtp(identifier, purpose, otp),
                 expiresAt: new Date(now + OTP_TTL_MS),
                 attempts: 0
             }
@@ -164,19 +168,19 @@ const issueOtp = async (phone, purpose, message) => {
     );
 
     try {
-        await sendSms(phone, message(otp));
+        await deliver(identifier, message(otp));
     } catch (error) {
-        await OtpVerification.deleteOne({ phone, purpose });
+        await OtpVerification.deleteOne({ phone: identifier, purpose });
         throw error;
     }
 
     return true;
 };
 
-const consumeOtp = async (phone, purpose, submittedOtp) => {
+const consumeOtp = async (identifier, purpose, submittedOtp) => {
     const otpRecord = await OtpVerification.findOneAndUpdate(
         {
-            phone,
+            phone: identifier,
             purpose,
             expiresAt: { $gt: new Date() },
             attempts: { $lt: OTP_MAX_ATTEMPTS }
@@ -190,7 +194,7 @@ const consumeOtp = async (phone, purpose, submittedOtp) => {
     }
 
     const expectedHash = Buffer.from(otpRecord.codeHash, "hex");
-    const submittedHash = Buffer.from(hashOtp(phone, purpose, submittedOtp), "hex");
+    const submittedHash = Buffer.from(hashOtp(identifier, purpose, submittedOtp), "hex");
     const isValid =
         expectedHash.length === submittedHash.length &&
         crypto.timingSafeEqual(expectedHash, submittedHash);
@@ -552,17 +556,11 @@ router.post(
                 });
             }
 
-            if (!isValidCitizenPhone(user.phone)) {
-                return res.status(400).json({
-                    success: false,
-                    message: "A valid 10-digit mobile number is not registered for this account"
-                });
-            }
-
             const otpSent = await issueOtp(
-                user.phone,
+                user.email,
                 "login",
-                (otp) => `Your login verification code is ${otp}. It expires in 5 minutes.`
+                (otp) => `Your Smart City login verification code is ${otp}. It expires in 5 minutes.`,
+                sendEmail
             );
 
             if (!otpSent) {
@@ -574,7 +572,7 @@ router.post(
 
             return res.status(200).json({
                 success: true,
-                message: "Verification code sent to your registered mobile number"
+                message: "Verification code sent to your registered email address"
             });
         } catch (error) {
             console.error("LOGIN OTP REQUEST ERROR:", error.message);
@@ -617,14 +615,14 @@ router.post(
                 role: "citizen"
             });
 
-            if (!user || !isValidCitizenPhone(user.phone) || user.isActive === false) {
+            if (!user || user.isActive === false) {
                 return res.status(401).json({
                     success: false,
                     message: "Invalid or expired verification code"
                 });
             }
 
-            const isValidOtp = await consumeOtp(user.phone, "login", otp);
+            const isValidOtp = await consumeOtp(user.email, "login", otp);
 
             if (!isValidOtp) {
                 return res.status(401).json({
