@@ -13,7 +13,8 @@ const normalize = (text = "") => {
         .toLowerCase()
         .trim()
         .replace(/[?!.,]/g, " ")
-        .replace(/\s+/g, " ");
+        .replace(/\s+/g, " ")
+        .trim();
 };
 
 
@@ -77,20 +78,7 @@ I can help you with:
     // GREETING
     // ================================================
 
-    if (
-        hasAny(message, [
-            "hello",
-            "hi",
-            "hey",
-            "hii",
-            "good morning",
-            "good afternoon",
-            "good evening",
-            "namaste",
-            "kem cho",
-            "kem chho"
-        ])
-    ) {
+    if (["hello", "hi", "hey", "hii", "good morning", "good afternoon", "good evening", "namaste", "kem cho", "kem chho"].includes(message)) {
 
         return `
 Hello! 👋
@@ -120,12 +108,12 @@ What would you like help with?
     ) {
 
         return `
-You can manage your complaints from **My Complaints**.
+You can manage your complaints from My Complaints.
 
 Steps:
 
-1. Open **My Complaints**.
-2. Click **Report Complaint** to submit a new complaint.
+1. Open My Complaints.
+2. Click Report Complaint to submit a new complaint.
 3. Enter category, subject and description.
 4. Submit the complaint.
 5. Your complaint will receive a Complaint ID.
@@ -164,16 +152,16 @@ If an administrator replies, the response will also appear in your complaint det
         return `
 To submit a civic complaint:
 
-1. Open **My Complaints**.
-2. Click **+ Report Complaint**.
+1. Open My Complaints.
+2. Click + Report Complaint.
 3. Select the complaint category.
 4. Enter the subject.
 5. Describe the problem clearly.
 6. Enter the location/address.
 7. Select priority.
-8. Click **Submit Complaint**.
+8. Click Submit Complaint.
 
-After submission, you will receive a Complaint ID and the complaint will start with **Pending** status.
+After submission, you will receive a Complaint ID and the complaint will start with Pending status.
         `.trim();
     }
 
@@ -195,16 +183,18 @@ After submission, you will receive a Complaint ID and the complaint will start w
     ) {
 
         return `
-You can check your government service applications from **My Applications**.
+You can check your government service applications from My Applications.
 
 The application status can be:
 
 • Pending
+• Under Review
+• In Progress
 • Approved
 • Rejected
 • Completed
 
-Open **My Applications** to view your application details and current status.
+Open My Applications to view your application details and current status.
         `.trim();
     }
 
@@ -230,12 +220,12 @@ Open **My Applications** to view your application details and current status.
         return `
 To apply for a city service:
 
-1. Open **City Services**.
+1. Open City Services.
 2. Select the service you need.
-3. Click **Apply Now**.
+3. Click Apply Now.
 4. Fill in the required information.
 5. Submit the application.
-6. You can later track it from **My Applications**.
+6. You can later track it from My Applications.
 
 The exact documents and information required depend on the selected service.
         `.trim();
@@ -261,7 +251,7 @@ The exact documents and information required depend on the selected service.
         return `
 Smart City Citizen Platform provides access to different city and government services.
 
-You can open **City Services** to see the available services and apply for the service you need.
+You can open City Services to see the available services and apply for the service you need.
 
 Common service areas include:
 
@@ -294,7 +284,7 @@ Common service areas include:
     ) {
 
         return `
-You can manage applicable service payments from the **Payments** section.
+You can manage applicable service payments from the Payments section.
 
 You can use it to:
 
@@ -302,6 +292,8 @@ You can use it to:
 • Check transaction status
 • View payment history
 • Access payment receipts
+
+Payment becomes available after your application is approved and a payable fee has been set. Open Payments, select Pay, and complete Razorpay Test Mode checkout. Use Refresh Payment if confirmation is delayed. These are test payments, not real collections.
 
 If a service does not require payment, no payment will be required for that application.
         `.trim();
@@ -325,11 +317,11 @@ If a service does not require payment, no payment will be required for that appl
     ) {
 
         return `
-Your approved digital documents can be accessed from **Digital Documents**.
+Your approved digital documents can be accessed from Digital Documents.
 
 Open:
 
-**Dashboard → Digital Documents**
+Dashboard → Digital Documents
 
 Depending on the service, you may find approved certificates, receipts and other important documents there.
         `.trim();
@@ -352,11 +344,11 @@ Depending on the service, you may find approved certificates, receipts and other
     ) {
 
         return `
-You can check important city announcements and application updates from **Notifications**.
+You can check important city announcements and application updates from Notifications.
 
 Open:
 
-**Dashboard → Notifications**
+Dashboard → Notifications
 
 Application-related updates can also be reflected in your application status.
         `.trim();
@@ -380,13 +372,13 @@ Application-related updates can also be reflected in your application status.
     ) {
 
         return `
-You can manage your citizen account from **Profile**.
+You can manage your citizen account from Profile.
 
 From there you can review or update your available account information.
 
 Open:
 
-**Dashboard → Profile**
+Dashboard → Profile
         `.trim();
     }
 
@@ -409,7 +401,7 @@ Open:
         return `
 If you have forgotten your password, use the password recovery option available on the Login page.
 
-If you are already logged in and want to change your account information, open your **Profile** section.
+If you are already logged in and want to change your account information, open your Profile section.
         `.trim();
     }
 
@@ -433,7 +425,7 @@ For a real emergency, please contact the appropriate official emergency service 
 
 The Smart City platform should not be used as a replacement for emergency services.
 
-For non-emergency civic problems, you can submit a complaint through **My Complaints**.
+For non-emergency civic problems, you can submit a complaint through My Complaints.
         `.trim();
     }
 
@@ -546,17 +538,18 @@ router.post("/chat", async (req, res) => {
 
         const {
             message
-        } = req.body;
+        } = req.body || {};
 
         if (
-            !message ||
-            typeof message !== "string"
+            typeof message !== "string" ||
+            !message.trim() ||
+            message.trim().length > 2000
         ) {
 
             return res.status(400).json({
                 success: false,
                 message:
-                    "Please enter a valid message"
+                    "Please enter a message between 1 and 2000 characters"
             });
         }
 
