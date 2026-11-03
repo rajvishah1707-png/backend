@@ -4,6 +4,7 @@ const schema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     applicationReference: String, serviceName: String, citizenName: String, citizenEmail: String,
     amountPaise: { type: Number, required: true, min: 1 },
+    provider: { type: String, enum: ['cashfree', 'razorpay'], default: 'razorpay' },
     currency: { type: String, default: 'INR' },
     status: { type: String, enum: ['Pending','Creating','Created','Paid','Failed','Needs Review'], default: 'Pending' },
     orderId: { type: String, unique: true, sparse: true },
