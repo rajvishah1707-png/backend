@@ -57,6 +57,12 @@ router.get('/', async (req, res) => {
     try {
         const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
         const filter = ownQuery(req);
+        if (req.query.applicationId !== undefined) {
+            if (typeof req.query.applicationId !== 'string' || !validId(req.query.applicationId)) {
+                return res.status(400).json({ success: false, message: 'Invalid application ID' });
+            }
+            filter._id = req.query.applicationId;
+        }
         const [applications, total] = await Promise.all([
             Application.find(filter).sort({ createdAt: -1 }).skip((page - 1) * 25).limit(25).lean(),
             Application.countDocuments(filter)
